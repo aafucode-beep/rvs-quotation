@@ -1,69 +1,40 @@
-import clientPromise from '../mongodb'
-import { QuotationTemplate, ROLE_DEFAULT_COMPANY_INFO } from '@/types/quotation'
-import { ObjectId } from 'mongodb'
+import { ObjectId, Collection, Filter } from 'mongodb'
+import { getDb } from '@/lib/db'
+import { QuotationTemplate } from '@/types/quotation'
 
-export class QuotationTemplateModel {
-  private static async getCollection() {
-    const client = await clientPromise
-    const db = client.db(process.env.MONGODB_DB)
-    return db.collection<QuotationTemplate>('quotationTemplates')
-  }
+async function getCollection(): Promise<Collection<QuotationTemplate>> {
+  const db = await getDb()
+  return db.collection<QuotationTemplate>('quotationTemplates')
+}
 
-  // 获取用户的模板（每个用户只有一个）
-  static async findByUserId(userId: string): Promise<QuotationTemplate | null> {
-    const collection = await this.getCollection()
-    return await collection.findOne({ userId })
-  }
+export const QuotationTemplateModel = {
+  async findAll(): Promise<QuotationTemplate[]> {
+    const col = await getCollection()
+    return col.find({}).sort({ isDefault: -1, createdAt: 1 }).toArray()
+  },
 
-  // 创建或更新用户模板（每个用户只有一个）
-  static async createOrUpdate(userId: string, companyInfo: QuotationTemplate['companyInfo'], quotationNotes?: string): Promise<QuotationTemplate> {
-    const collection = await this.getCollection()
+  async findDefault(): Promise<QuotationTemplate | null> {
+    const col = await getCollection()
+    return col.findOne({ isDefault: true } as any)
+  },
 
-    const existingTemplate = await this.findByUserId(userId)
+  async create(data: Omit<QuotationTemplate, '_id'>): Promise<QuotationTemplate> {
+    const col = await getCollection()
+    const result = await col.insertOne(data as any)
+    return { ...data, _id: result.insertedId.toString() }
+  },
 
-    const updateData: any = {
-      companyInfo,
-      updatedAt: new Date()
-    }
+  async update(id: string, data: Partial<QuotationTemplate>): Promise<QuotationTemplate | null> {
+    const col = await getCollection()
+    const filter: Filter<QuotationTemplate> = { _id: new ObjectId(id) } as any
+    await col.updateOne(filter, { $set: data })
+    return col.findOne(filter)
+  },
 
-    if (quotationNotes !== undefined) {
-      updateData.quotationNotes = quotationNotes
-    }
-
-    if (existingTemplate) {
-      // 更新现有模板
-      await collection.updateOne(
-        { userId },
-        { $set: updateData }
-      )
-      return { ...existingTemplate, ...updateData }
-    } else {
-      // 创建新模板
-      const template: Omit<QuotationTemplate, '_id'> = {
-        userId,
-        companyInfo,
-        quotationNotes,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      }
-
-      const result = await collection.insertOne(template)
-      return { ...template, _id: result.insertedId.toString() }
-    }
-  }
-
-  // 获取或创建用户的模板
-  static async getOrCreateTemplate(userId: string, userRole: string): Promise<QuotationTemplate> {
-    let template = await this.findByUserId(userId)
-
-    if (!template) {
-      // 根据角色创建默认模板
-      const defaultCompanyInfo = ROLE_DEFAULT_COMPANY_INFO[userRole] || ROLE_DEFAULT_COMPANY_INFO.user
-      template = await this.createOrUpdate(userId, defaultCompanyInfo as QuotationTemplate['companyInfo'])
-    }
-
-    return template
-  }
-
-
+  async delete(id: string): Promise<boolean> {
+    const col = await getCollection()
+    const filter: Filter<QuotationTemplate> = { _id: new ObjectId(id) } as any
+    const result = await col.deleteOne(filter)
+    return result.deletedCount > 0
+  },
 }

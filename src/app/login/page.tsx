@@ -1,122 +1,100 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
-import Link from 'next/link'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/providers/AuthProvider'
+import { Button } from '@/components/ui/Button'
+import { ShoppingCart, Loader2 } from 'lucide-react'
 
 export default function LoginPage() {
-  const [formData, setFormData] = useState({
-    username: '',
-    password: ''
-  })
-  const [error, setError] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { login } = useAuth()
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setIsLoading(true)
+    setLoading(true)
     setError('')
 
     try {
-      await login(formData.username, formData.password)
-      // 登录成功，重定向到仪表板
-      router.push('/dashboard')
-    } catch (error) {
-      setError(error instanceof Error ? error.message : '登录失败')
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        setError(data.error || '登录失败')
+        return
+      }
+
+      login(data.token, data.user)
+      const from = searchParams.get('from') || '/product-list'
+      router.push(from)
+    } catch {
+      setError('网络错误，请重试')
     } finally {
-      setIsLoading(false)
+      setLoading(false)
     }
   }
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    })
-  }
-
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-6 sm:space-y-8">
-        {/* 登录卡片 */}
-        <div className="bg-white rounded-lg shadow-md p-6 sm:p-8">
-          <div className="text-center">
-            <h2 className="text-2xl sm:text-3xl font-extrabold text-gray-900">
-              登录
-            </h2>
-            <p className="mt-2 text-sm text-gray-600">
-              RVS Lighting 产品选型表系统
-            </p>
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+      <div className="max-w-md w-full">
+        <div className="bg-white rounded-xl shadow-lg p-8">
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-full mb-4">
+              <ShoppingCart className="h-8 w-8 text-white" />
+            </div>
+            <h1 className="text-2xl font-bold text-gray-900">RVS Lighting</h1>
+            <p className="text-gray-500 mt-2">产品选型报价系统</p>
           </div>
 
-          <form className="mt-6 sm:mt-8 space-y-4 sm:space-y-6" onSubmit={handleSubmit}>
-            <div className="space-y-4">
-              <div>
-                <label htmlFor="username" className="block text-sm font-medium text-gray-700">
-                  用户名
-                </label>
-                <input
-                  id="username"
-                  name="username"
-                  type="text"
-                  required
-                  value={formData.username}
-                  onChange={handleChange}
-                  className="mt-1 appearance-none relative block w-full px-3 py-3 sm:py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 text-base sm:text-sm"
-                  placeholder="请输入用户名"
-                />
-              </div>
-              <div>
-                <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                  密码
-                </label>
-                <input
-                  id="password"
-                  name="password"
-                  type="password"
-                  required
-                  value={formData.password}
-                  onChange={handleChange}
-                  className="mt-1 appearance-none relative block w-full px-3 py-3 sm:py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 text-base sm:text-sm"
-                  placeholder="请输入密码"
-                />
-              </div>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">用户名</label>
+              <input
+                type="text"
+                value={username}
+                onChange={e => setUsername(e.target.value)}
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="请输入用户名"
+                required
+                autoFocus
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">密码</label>
+              <input
+                type="password"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="请输入密码"
+                required
+              />
             </div>
 
             {error && (
-              <div className="text-red-600 text-sm text-center bg-red-50 p-3 rounded-md">
+              <div className="text-red-600 text-sm bg-red-50 border border-red-200 rounded-lg px-3 py-2">
                 {error}
               </div>
             )}
 
-            <div>
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="group relative w-full flex justify-center py-3 sm:py-2 px-4 border border-transparent text-base sm:text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                {isLoading ? '登录中...' : '登录'}
-              </button>
-            </div>
-
-            <div className="text-center">
-              <span className="text-sm text-gray-600">
-                还没有账号？{' '}
-                <Link href="/register" className="font-medium text-blue-600 hover:text-blue-500">
-                  立即注册
-                </Link>
-              </span>
-            </div>
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : '登录'}
+            </Button>
           </form>
         </div>
-
-        {/* 移动端提示 */}
-        <div className="text-center text-xs text-gray-500 sm:hidden">
-          <p>建议使用横屏模式以获得更好的体验</p>
-        </div>
+        <p className="text-center text-xs text-gray-400 mt-4">
+          如需账户请联系管理员
+        </p>
       </div>
     </div>
   )

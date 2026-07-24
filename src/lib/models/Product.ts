@@ -1,150 +1,61 @@
-import clientPromise from '../mongodb'
+import { ObjectId, Collection, Filter } from 'mongodb'
+import { getDb } from '@/lib/db'
 import { Product } from '@/types/product'
-import { ObjectId } from 'mongodb'
 
-export class ProductModel {
-  private static async getCollection() {
-    const client = await clientPromise
-    const db = client.db(process.env.MONGODB_DB)
-    return db.collection<Product>('products')
-  }
+async function getCollection(): Promise<Collection<Product>> {
+  const db = await getDb()
+  return db.collection<Product>('products')
+}
 
-  static async findAll(): Promise<Product[]> {
-    const collection = await this.getCollection()
-    return await collection.find({}).sort({ order: 1, createdAt: -1 }).toArray()
-  }
+export const ProductModel = {
+  async findAll(): Promise<Product[]> {
+    const col = await getCollection()
+    return col.find({ isActive: true }).sort({ order: 1 }).toArray()
+  },
 
-  static async findById(id: string): Promise<Product | null> {
-    const collection = await this.getCollection()
-    return await collection.findOne({ _id: new ObjectId(id) } as any)
-  }
+  async findAllForAdmin(): Promise<Product[]> {
+    const col = await getCollection()
+    return col.find({}).sort({ order: 1 }).toArray()
+  },
 
-  static async create(productData: Omit<Product, '_id' | 'createdAt' | 'updatedAt'>): Promise<Product> {
-    const collection = await this.getCollection()
+  async findById(id: string): Promise<Product | null> {
+    const col = await getCollection()
+    const filter: Filter<Product> = { _id: new ObjectId(id) } as any
+    return col.findOne(filter)
+  },
 
-    const product: Omit<Product, '_id'> = {
-      ...productData,
-      // 确保必要字段存在
-      isActive: productData.isActive !== false,
-      isNew: productData.isNew || false,
-      order: productData.order || 999,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    }
+  async create(data: Omit<Product, '_id'>): Promise<Product> {
+    const col = await getCollection()
+    const now = new Date()
+    const result = await col.insertOne({ ...data, createdAt: now, updatedAt: now } as any)
+    return { ...data, _id: result.insertedId.toString(), createdAt: now, updatedAt: now } as Product
+  },
 
-    const result = await collection.insertOne(product as any)
-    return { ...product, _id: result.insertedId.toString() } as Product
-  }
+  async update(id: string, data: Partial<Product>): Promise<Product | null> {
+    const col = await getCollection()
+    const filter: Filter<Product> = { _id: new ObjectId(id) } as any
+    await col.updateOne(filter, { $set: { ...data, updatedAt: new Date() } })
+    return col.findOne(filter)
+  },
 
-  static async update(id: string, productData: Partial<Product>): Promise<boolean> {
-    const collection = await this.getCollection()
-
-    const result = await collection.updateOne(
-      { _id: new ObjectId(id) } as any,
-      {
-        $set: {
-          ...productData,
-          updatedAt: new Date()
-        }
-      }
-    )
-
-    return result.modifiedCount > 0
-  }
-
-  static async delete(id: string): Promise<boolean> {
-    const collection = await this.getCollection()
-    const result = await collection.deleteOne({ _id: new ObjectId(id) } as any)
+  async delete(id: string): Promise<boolean> {
+    const col = await getCollection()
+    const filter: Filter<Product> = { _id: new ObjectId(id) } as any
+    const result = await col.deleteOne(filter)
     return result.deletedCount > 0
-  }
+  },
 
-  static async findByFilters(filters: {
-    isActive?: boolean
-    isFeatured?: boolean
-    productType?: string
-    brand?: string
-  }): Promise<Product[]> {
-    const collection = await this.getCollection()
-    const query: any = {}
-
-    if (filters.isActive !== undefined) {
-      query.isActive = filters.isActive
-    }
-    if (filters.isFeatured !== undefined) {
-      query.isFeatured = filters.isFeatured
-    }
-    if (filters.productType) {
-      query.productType = filters.productType
-    }
-    if (filters.brand) {
-      query.brand = filters.brand
-    }
-
-    return await collection.find(query).sort({ order: 1, createdAt: -1 }).toArray()
-  }
-
-  static async updateOrder(id: string, order: number): Promise<boolean> {
-    const collection = await this.getCollection()
-
-    const result = await collection.updateOne(
-      { _id: new ObjectId(id) } as any,
-      {
-        $set: {
-          order: order,
-          updatedAt: new Date()
-        }
-      }
-    )
-
-    return result.modifiedCount > 0
-  }
-
-  static async toggleActive(id: string): Promise<boolean> {
-    const collection = await this.getCollection()
-    const product = await this.findById(id)
-
-    if (!product) return false
-
-    const result = await collection.updateOne(
-      { _id: new ObjectId(id) } as any,
-      {
-        $set: {
-          isActive: !product.isActive,
-          updatedAt: new Date()
-        }
-      }
-    )
-
-    return result.modifiedCount > 0
-  }
-
-  static async toggleFeatured(id: string): Promise<boolean> {
-    const collection = await this.getCollection()
-    const product = await this.findById(id)
-
-    if (!product) return false
-
-    const result = await collection.updateOne(
-      { _id: new ObjectId(id) } as any,
-      {
-        $set: {
-          isFeatured: !product.isFeatured,
-          updatedAt: new Date()
-        }
-      }
-    )
-
-    return result.modifiedCount > 0
-  }
-
-  static async count(): Promise<number> {
-    const collection = await this.getCollection()
-    return await collection.countDocuments()
-  }
-
-  static async deleteAll(): Promise<number> {
-    const collection = await this.getCollection()
-    const result = await collection.deleteMany({})
-    return result.deletedCount
-  }
+  async search(query: string): Promise<Product[]> {
+    const col = await getCollection()
+    const regex = { $regex: query, $options: 'i' }
+    return col.find({
+      $or: [
+        { productType: regex },
+        { brand: regex },
+        { model: regex },
+        { 'specifications.brief': regex },
+      ],
+      isActive: true,
+    }).sort({ order: 1 }).toArray()
+  },
 }

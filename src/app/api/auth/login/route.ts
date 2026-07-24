@@ -1,77 +1,50 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { UserModel } from '../../../../lib/models/User'
-import jwt from 'jsonwebtoken'
+import { NextRequest } from 'next/server'
+import { UserModel } from '@/lib/models/User'
+import { generateToken } from '@/lib/auth'
+import { ok, err, withErrorHandler, parseBody } from '@/lib/api'
+import { loginSchema } from '@/lib/validations'
 
-export async function POST(request: NextRequest) {
-  try {
-    const { username, password } = await request.json()
+export const POST = withErrorHandler(async (request: NextRequest) => {
+  const { username, password } = await parseBody(request, loginSchema)
 
-    if (!username || !password) {
-      return NextResponse.json(
-        { error: '用户名和密码不能为空' },
-        { status: 400 }
-      )
-    }
+  const user = await UserModel.findByUsername(username)
+  if (!user) {
+    return err('用户不存在', 404)
+  }
 
-    // 查找用户
-    const user = await UserModel.findByUsername(username)
-    if (!user) {
-      return NextResponse.json(
-        { error: '用户不存在' },
-        { status: 404 }
-      )
-    }
+  if (!user.isActive) {
+    return err('账户已被禁用', 403)
+  }
 
-    // 验证密码
-    const isValidPassword = await UserModel.verifyPassword(password, user.password!)
-    if (!isValidPassword) {
-      return NextResponse.json(
-        { error: '密码错误' },
-        { status: 401 }
-      )
-    }
+  const valid = await UserModel.verifyPassword(password, user.password)
+  if (!valid) {
+    return err('密码错误', 401)
+  }
 
-    // 生成JWT token
-    const token = jwt.sign(
-      {
-        userId: user._id,
-        username: user.username,
-        email: user.email,
-        role: user.role
-      },
-      process.env.JWT_SECRET!,
-      { expiresIn: '7d' }
-    )
+  const token = generateToken({
+    userId: (user._id as any).toString(),
+    username: user.username,
+    email: user.email,
+    role: user.role,
+  })
 
-    // 返回用户信息（不包含密码）
-    const userResponse = {
-      id: user._id,
+  const response = ok({
+    message: '登录成功',
+    user: {
+      id: (user._id as any).toString(),
       username: user.username,
       email: user.email,
-      role: user.role
-    }
+      role: user.role,
+    },
+    token,
+  })
 
-    const response = NextResponse.json({
-      message: '登录成功',
-      user: userResponse,
-      token
-    })
+  response.cookies.set('auth-token', token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: 7 * 24 * 60 * 60,
+  })
 
-    // 设置HTTP-only cookie
-    response.cookies.set('auth-token', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60 // 7 days
-    })
-
-    return response
-
-  } catch (error) {
-    console.error('Login error:', error)
-    return NextResponse.json(
-      { error: '登录失败，请稍后重试' },
-      { status: 500 }
-    )
-  }
-}
+  return response
+})

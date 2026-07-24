@@ -7,7 +7,7 @@ import { useAuth } from '@/providers/AuthProvider'
 import { Loader2, ArrowLeft, Trash2, Plus, Minus, Download, Printer, Save, FileText, Settings, Edit } from 'lucide-react'
 import { Product } from '@/types/product'
 import { QuotationTemplate } from '@/types/quotation'
-import { ProjectListSave } from '@/lib/models/ProjectListSave'
+import type { ProjectListSaveDoc } from '@/lib/models/ProjectListSave'
 import { formatPrice, shouldShowPrice } from '@/lib/utils'
 import { CompanyInfoEditor } from '@/components/quotation/CompanyInfoEditor'
 
@@ -51,7 +51,7 @@ export default function ProjectListPage() {
   const [isLoadingTemplate, setIsLoadingTemplate] = useState(true)
   const [showTemplateEditor, setShowTemplateEditor] = useState(false)
   const [showImportDialog, setShowImportDialog] = useState(false)
-  const [savedProjects, setSavedProjects] = useState<ProjectListSave[]>([])
+  const [savedProjects, setSavedProjects] = useState<ProjectListSaveDoc[]>([])
   const [isLoadingSaves, setIsLoadingSaves] = useState(false)
 
   // 客户信息状态
@@ -307,7 +307,7 @@ export default function ProjectListPage() {
       console.error('获取模板失败:', error)
       // 使用默认模板
       setTemplate({
-        userId: user?.id || '',
+        userId: user?.userId || '',
         companyInfo: {
           name: '上海芮维溪智能科技有限公司',
           brandName: 'RVS Lighting',
@@ -410,7 +410,7 @@ export default function ProjectListPage() {
     const now = new Date()
     const year = now.getFullYear()
     const month = String(now.getMonth() + 1).padStart(2, '0')
-    const uid = user?.id?.slice(-2) || '00' // 取用户ID后两位
+    const uid = user?.userId?.slice(-2) || '00' // 取用户ID后两位
     const sequence = Math.floor(Math.random() * 100).toString().padStart(2, '0')
     const number = `RQ-${uid}${year}${month}${sequence}A`
     setQuotationNumber(number)
@@ -2228,21 +2228,21 @@ export default function ProjectListPage() {
                   ) : (
                     <div className="space-y-3">
                       {savedProjects.map((save) => (
-                        <div key={save._id} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50">
+                        <div key={String(save._id)} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50">
                           <div className="flex items-center justify-between">
                             <div className="flex-1">
                               <h4 className="font-medium text-gray-900">{save.name}</h4>
                               <div className="text-sm text-gray-500 mt-1">
                                 <p>客户：{save.customerInfo?.name || '未设置'}</p>
                                 <p>项目：{save.customerInfo?.projectName || '未设置'}</p>
-                                <p>产品数量：{save.projectList?.length || 0} 项</p>
+                                <p>产品数量：{save.items?.length || 0} 项</p>
                                 <p>保存时间：{new Date(save.updatedAt).toLocaleString('zh-CN')}</p>
                               </div>
                             </div>
                             <div className="flex items-center space-x-2 ml-4">
                               <button
                                 type="button"
-                                onClick={() => save._id && handleImport(save._id)}
+                                onClick={() => save._id && handleImport(String(save._id))}
                                 className="inline-flex items-center px-3 py-1 border border-green-300 rounded text-sm font-medium text-green-700 bg-green-50 hover:bg-green-100 transition-colors"
                               >
                                 <Download className="w-4 h-4 mr-1" />
@@ -2250,7 +2250,7 @@ export default function ProjectListPage() {
                               </button>
                               <button
                                 type="button"
-                                onClick={() => save._id && handleDeleteSave(save._id)}
+                                onClick={() => save._id && handleDeleteSave(String(save._id))}
                                 className="inline-flex items-center px-3 py-1 border border-red-300 rounded text-sm font-medium text-red-700 bg-red-50 hover:bg-red-100 transition-colors"
                                 style={{ backgroundColor: '#fef2f2', color: '#b91c1c', borderColor: '#fca5a5' }}
                               >

@@ -1,31 +1,17 @@
-import { NextRequest } from 'next/server'
 import jwt from 'jsonwebtoken'
-import { JWTPayload } from '@/types/auth'
+import type { JWTPayload } from '@/types/auth'
 
-export async function getUserFromToken(request: NextRequest): Promise<JWTPayload | null> {
-  const token = request.cookies.get('auth-token')?.value
+const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-in-production'
+const EXPIRES_IN = '7d'
 
-  if (!token) {
-    return null
-  }
-
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as JWTPayload
-    return decoded
-  } catch {
-    return null
-  }
+export function generateToken(payload: Omit<JWTPayload, 'iat' | 'exp'>): string {
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: EXPIRES_IN })
 }
 
 export function verifyToken(token: string): JWTPayload | null {
   try {
-    return jwt.verify(token, process.env.JWT_SECRET!) as JWTPayload
+    return jwt.verify(token, JWT_SECRET) as JWTPayload
   } catch {
     return null
   }
-}
-
-export function generateToken(payload: JWTPayload, expiresIn: string = '7d'): string {
-  const secret = process.env.JWT_SECRET || 'default-secret'
-  return (jwt.sign as any)(payload, secret, { expiresIn })
 }

@@ -286,7 +286,7 @@ export function UserManagement() {
                       </TableCell>
                       <TableCell className="text-xs sm:text-sm hidden sm:table-cell">{user.email}</TableCell>
                       <TableCell className="text-xs sm:text-sm">{getRoleBadge(user.role)}</TableCell>
-                      <TableCell className="text-xs sm:text-sm hidden md:table-cell">{formatDate(user.createdAt)}</TableCell>
+                      <TableCell className="text-xs sm:text-sm hidden md:table-cell">{formatDate(user.createdAt || new Date())}</TableCell>
                       <TableCell>
                         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-1 sm:gap-2">
                           <select

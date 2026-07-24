@@ -1,17 +1,5 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
 # dependencies
 /node_modules
-/.pnp
-.pnp.*
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/versions
-
-# testing
-/coverage
 
 # next.js
 /.next/
@@ -28,11 +16,11 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-.pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env*
-!.env.example
+# env files
+.env
+.env.local
+.env*.local
 
 # vercel
 .vercel
@@ -41,56 +29,15 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# 文档和敏感信息安全
-# 忽略所有markdown文档（包含敏感信息）
-*.md
-!README.md
-
-# 忽略文档目录（可能包含敏感信息）
-/docs/
-/backups/
-
-# 忽略脚本目录（可能包含敏感配置）
-/scripts/
-
-# 忽略临时文件和调试文件
-*.log
-*.tmp
-*.temp
-test-*.html
-test-*.js
-*-debug.*
+# test files
+test-*
 *-test.*
 
-# 忽略测试和开发用途的文件/目录
-/src/app/test-db/
-/src/app/api/test-*/
-/src/app/api/xxb-products/
-/src/app/products/
-/src/app/simple-products/
-/src/app/components/ProductsTable.tsx
-
-# 忽略可能的敏感配置文件
-config.json
-settings.json
-secrets.json
-
-# 忽略数据库备份文件
-*.sql
-*.dump
-*.backup
-
-# 忽略上传的文件
-/uploads/
-/temp/
-
-# 忽略IDE和编辑器文件
-.vscode/
-.idea/
+# IDE
+.idea
+.vscode
 *.swp
 *.swo
-*~
 
-# 忽略操作系统文件
+# OS
 Thumbs.db
-.DS_Store

@@ -1,100 +1,42 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { ProjectListSaveModel } from '@/lib/models/ProjectListSave'
-import jwt from 'jsonwebtoken'
+import { ok, err, withErrorHandler, getUser } from '@/lib/api'
 
-async function getUserFromToken(request: NextRequest) {
-  const token = request.cookies.get('auth-token')?.value
-  
-  if (!token) {
-    return null
-  }
+export const GET = withErrorHandler(async (request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
+  const user = getUser(request)
+  if (!user) return err('未授权访问', 401)
 
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as any
-    return decoded
-  } catch (error) {
-    return null
-  }
-}
+  const { id } = await params
+  const save = await ProjectListSaveModel.findById(id)
+  if (!save) return err('清单不存在', 404)
+  if (save.userId !== user.userId) return err('无权访问', 403)
 
-// 获取单个暂存
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const user = await getUserFromToken(request)
-    if (!user) {
-      return NextResponse.json(
-        { error: '未授权访问' },
-        { status: 401 }
-      )
-    }
+  return ok({ save })
+})
 
-    const { id } = await params
-    const save = await ProjectListSaveModel.findById(id)
-    
-    if (!save) {
-      return NextResponse.json(
-        { error: '暂存不存在' },
-        { status: 404 }
-      )
-    }
+export const PUT = withErrorHandler(async (request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
+  const user = getUser(request)
+  if (!user) return err('未授权访问', 401)
 
-    // 确保只能访问自己的暂存
-    if (save.userId !== user.userId) {
-      return NextResponse.json(
-        { error: '无权访问此暂存' },
-        { status: 403 }
-      )
-    }
+  const { id } = await params
+  const existing = await ProjectListSaveModel.findById(id)
+  if (!existing) return err('清单不存在', 404)
+  if (existing.userId !== user.userId) return err('无权访问', 403)
 
-    return NextResponse.json({
-      save
-    })
+  const data = await request.json()
+  const updated = await ProjectListSaveModel.update(id, data)
+  return ok({ message: '更新成功', save: updated })
+})
 
-  } catch (error) {
-    console.error('Get project list save error:', error)
-    return NextResponse.json(
-      { error: '获取暂存失败' },
-      { status: 500 }
-    )
-  }
-}
+export const DELETE = withErrorHandler(async (request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
+  const user = getUser(request)
+  if (!user) return err('未授权访问', 401)
 
-// 删除暂存
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const user = await getUserFromToken(request)
-    if (!user) {
-      return NextResponse.json(
-        { error: '未授权访问' },
-        { status: 401 }
-      )
-    }
+  const { id } = await params
+  const existing = await ProjectListSaveModel.findById(id)
+  if (!existing) return err('清单不存在', 404)
+  if (existing.userId !== user.userId) return err('无权访问', 403)
 
-    const { id } = await params
-    const success = await ProjectListSaveModel.delete(id, user.userId)
-    
-    if (!success) {
-      return NextResponse.json(
-        { error: '删除失败，暂存不存在或无权删除' },
-        { status: 404 }
-      )
-    }
-
-    return NextResponse.json({
-      message: '暂存删除成功'
-    })
-
-  } catch (error) {
-    console.error('Delete project list save error:', error)
-    return NextResponse.json(
-      { error: '删除暂存失败' },
-      { status: 500 }
-    )
-  }
-}
+  await ProjectListSaveModel.delete(id)
+  return ok({ message: '删除成功' })
+})

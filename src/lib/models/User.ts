@@ -1,116 +1,87 @@
-import clientPromise from '../mongodb'
-import { User, UserRole } from '@/types/auth'
+import { ObjectId, Collection, Filter } from 'mongodb'
+import { getDb } from '@/lib/db'
 import bcrypt from 'bcryptjs'
-import { ObjectId } from 'mongodb'
 
-export class UserModel {
-  private static async getCollection() {
-    const client = await clientPromise
-    // 使用环境变量中配置的数据库
-    const db = client.db(process.env.MONGODB_DB)
-    return db.collection<User>('users')
-  }
+export interface UserDoc {
+  _id?: string | ObjectId
+  username: string
+  email: string
+  password: string
+  role: 'admin' | 'dealer' | 'user'
+  isActive: boolean
+  createdAt: Date
+  updatedAt: Date
+}
 
-  static async findByUsername(username: string): Promise<User | null> {
-    const collection = await this.getCollection()
-    // 使用正则表达式进行不区分大小写的查找
-    return await collection.findOne({ username: { $regex: new RegExp(`^${username}$`, 'i') } })
-  }
+async function getCollection(): Promise<Collection<UserDoc>> {
+  const db = await getDb()
+  return db.collection<UserDoc>('users')
+}
 
-  static async findByEmail(email: string): Promise<User | null> {
-    const collection = await this.getCollection()
-    return await collection.findOne({ email })
-  }
+export const UserModel = {
+  async findByUsername(username: string): Promise<UserDoc | null> {
+    const col = await getCollection()
+    return col.findOne({ username })
+  },
 
-  static async findById(id: string): Promise<User | null> {
-    const collection = await this.getCollection()
-    return await collection.findOne({ _id: new ObjectId(id) } as any)
-  }
+  async findById(id: string): Promise<UserDoc | null> {
+    const col = await getCollection()
+    const filter: Filter<UserDoc> = { _id: new ObjectId(id) } as any
+    return col.findOne(filter)
+  },
 
-  static async create(userData: {
-    username: string
-    email: string
-    password: string
-    role?: UserRole
-  }): Promise<User> {
-    const collection = await this.getCollection()
-    
-    // 检查用户名是否已存在
-    const existingUser = await this.findByUsername(userData.username)
-    if (existingUser) {
-      throw new Error('用户名已存在')
+  async findAll(): Promise<Omit<UserDoc, 'password'>[]> {
+    const col = await getCollection()
+    return col.find({}, { projection: { password: 0 } }).toArray()
+  },
+
+  async create(data: { username: string; email: string; password: string; role: string }): Promise<UserDoc> {
+    const col = await getCollection()
+    const hashed = await bcrypt.hash(data.password, 10)
+    const now = new Date()
+    const doc = {
+      username: data.username,
+      email: data.email,
+      password: hashed,
+      role: data.role as 'admin' | 'dealer' | 'user',
+      isActive: true,
+      createdAt: now,
+      updatedAt: now,
     }
+    const result = await col.insertOne(doc as any)
+    return { ...doc, _id: result.insertedId }
+  },
 
-    // 检查邮箱是否已存在
-    const existingEmail = await this.findByEmail(userData.email)
-    if (existingEmail) {
-      throw new Error('邮箱已存在')
+  async verifyPassword(plain: string, hashed: string): Promise<boolean> {
+    return bcrypt.compare(plain, hashed)
+  },
+
+  async updatePassword(id: string, newPassword: string): Promise<void> {
+    const col = await getCollection()
+    const filter: Filter<UserDoc> = { _id: new ObjectId(id) } as any
+    const hashed = await bcrypt.hash(newPassword, 10)
+    await col.updateOne(filter, { $set: { password: hashed, updatedAt: new Date() } })
+  },
+
+  async updateRole(id: string, role: string): Promise<void> {
+    const col = await getCollection()
+    const filter: Filter<UserDoc> = { _id: new ObjectId(id) } as any
+    await col.updateOne(filter, { $set: { role: role as any, updatedAt: new Date() } })
+  },
+
+  async toggleActive(id: string): Promise<void> {
+    const col = await getCollection()
+    const filter: Filter<UserDoc> = { _id: new ObjectId(id) } as any
+    const user = await col.findOne(filter)
+    if (user) {
+      await col.updateOne(filter, { $set: { isActive: !user.isActive, updatedAt: new Date() } })
     }
+  },
 
-    // 加密密码
-    const hashedPassword = await bcrypt.hash(userData.password, 12)
-
-    const user: Omit<User, '_id'> = {
-      username: userData.username,
-      email: userData.email,
-      password: hashedPassword,
-      role: userData.role || 'user',
-      createdAt: new Date(),
-      updatedAt: new Date()
-    }
-
-    const result = await collection.insertOne(user)
-    return { ...user, _id: result.insertedId.toString() }
-  }
-
-  static async updateRole(userId: string, role: UserRole): Promise<boolean> {
-    const collection = await this.getCollection()
-    
-    const result = await collection.updateOne(
-      { _id: new ObjectId(userId) } as any,
-      {
-        $set: {
-          role,
-          updatedAt: new Date()
-        }
-      }
-    )
-
-    return result.modifiedCount > 0
-  }
-
-  static async findAll(): Promise<User[]> {
-    const collection = await this.getCollection()
-    return await collection.find({}).toArray()
-  }
-
-  static async verifyPassword(password: string, hashedPassword: string): Promise<boolean> {
-    return await bcrypt.compare(password, hashedPassword)
-  }
-
-  static async updatePassword(userId: string, newPassword: string): Promise<boolean> {
-    const collection = await this.getCollection()
-
-    // 加密新密码
-    const hashedPassword = await bcrypt.hash(newPassword, 12)
-
-    const result = await collection.updateOne(
-      { _id: new ObjectId(userId) } as any,
-      {
-        $set: {
-          password: hashedPassword,
-          updatedAt: new Date()
-        }
-      }
-    )
-
-    return result.modifiedCount > 0
-  }
-
-  static async delete(userId: string): Promise<boolean> {
-    const collection = await this.getCollection()
-
-    const result = await collection.deleteOne({ _id: new ObjectId(userId) } as any)
+  async delete(id: string): Promise<boolean> {
+    const col = await getCollection()
+    const filter: Filter<UserDoc> = { _id: new ObjectId(id) } as any
+    const result = await col.deleteOne(filter)
     return result.deletedCount > 0
-  }
+  },
 }

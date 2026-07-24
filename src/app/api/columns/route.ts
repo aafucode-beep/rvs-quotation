@@ -1,37 +1,21 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { ColumnConfigModel } from '@/lib/models/ColumnConfig'
-import { getUserFromToken } from '@/lib/auth'
+import { ok, err, withErrorHandler, getUser, requireAdmin } from '@/lib/api'
+import { columnConfigSchema } from '@/lib/validations'
 
-// 获取用户可见的列配置（不需要管理员权限）
-export async function GET(request: NextRequest) {
-  try {
-    // 获取用户信息
-    const user = await getUserFromToken(request)
-    if (!user) {
-      return NextResponse.json(
-        { error: '未授权访问' },
-        { status: 401 }
-      )
-    }
+export const GET = withErrorHandler(async (request: NextRequest) => {
+  const user = getUser(request)
+  if (!user) return err('未授权访问', 401)
 
-    // 获取所有可见的列配置
-    const allColumns = await ColumnConfigModel.findVisible()
-    console.log(`找到 ${allColumns.length} 个可见列配置`)
+  const columns = await ColumnConfigModel.findAll()
+  return ok({ columns })
+})
 
-    // 根据用户角色过滤列配置
-    const userColumns = allColumns.filter(column => 
-      column.roles.includes(user.role) && column.isVisible
-    )
+export const POST = withErrorHandler(async (request: NextRequest) => {
+  const { user, error } = requireAdmin(request)
+  if (error) return error
 
-    return NextResponse.json({
-      columns: userColumns
-    })
-
-  } catch (error) {
-    console.error('Get columns error:', error)
-    return NextResponse.json(
-      { error: '获取列配置失败' },
-      { status: 500 }
-    )
-  }
-}
+  const data = await request.json().then(body => columnConfigSchema.parse(body))
+  const column = await ColumnConfigModel.create(data)
+  return ok({ message: '列配置创建成功', column }, 201)
+})
